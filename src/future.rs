@@ -80,23 +80,28 @@ impl Stream for SubscriptionStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let pinned = std::pin::pin!(self);
         let me = pinned.as_ref().get_ref();
-        let mut map = me.ndb.subs.lock().unwrap();
-        let sub_state = map.entry(me.sub_id).or_insert(SubscriptionState {
-            done: false,
-            waker: None,
-        });
 
-        // we've unsubscribed
-        if sub_state.done {
-            return Poll::Ready(None);
+        // Check done state with lock, then release before FFI call
+        // to avoid deadlock with C writer thread callbacks
+        {
+            let map = me.ndb.subs.lock().unwrap();
+            if map.get(&me.sub_id).map(|s| s.done).unwrap_or(false) {
+                return Poll::Ready(None);
+            }
         }
 
+        // FFI call without holding mutex - prevents deadlock
         let notes = me.ndb.poll_for_notes(me.sub_id, me.max_notes);
         if !notes.is_empty() {
             return Poll::Ready(Some(notes));
         }
 
-        // Not ready yet, store waker
+        // Re-acquire lock to store waker
+        let mut map = me.ndb.subs.lock().unwrap();
+        let sub_state = map.entry(me.sub_id).or_insert(SubscriptionState {
+            done: false,
+            waker: None,
+        });
         sub_state.waker = Some(cx.waker().clone());
         std::task::Poll::Pending
     }
