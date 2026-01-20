@@ -518,6 +518,70 @@ impl Ndb {
         Ok(results)
     }
 
+    /// Search event content using nostrdb's fulltext search.
+    /// If a filter is provided, results will be filtered (e.g., by kind).
+    pub fn text_search<'a>(
+        &self,
+        txn: &'a Transaction,
+        query: &str,
+        filter: Option<&Filter>,
+        limit: i32,
+    ) -> Result<Vec<Note<'a>>> {
+        let c_query = CString::new(query).map_err(|_| Error::DecodeError)?;
+
+        let mut config: bindings::ndb_text_search_config = unsafe { std::mem::zeroed() };
+        unsafe {
+            bindings::ndb_default_text_search_config(&mut config);
+            bindings::ndb_text_search_config_set_limit(&mut config, limit);
+        }
+
+        let mut results: bindings::ndb_text_search_results = unsafe { std::mem::zeroed() };
+
+        let success = match filter {
+            Some(f) => {
+                let mut filter_data = f.data;
+                unsafe {
+                    bindings::ndb_text_search_with(
+                        txn.as_mut_ptr(),
+                        c_query.as_ptr(),
+                        &mut results,
+                        &mut config,
+                        &mut filter_data,
+                    )
+                }
+            }
+            None => unsafe {
+                bindings::ndb_text_search(
+                    txn.as_mut_ptr(),
+                    c_query.as_ptr(),
+                    &mut results,
+                    &mut config,
+                )
+            },
+        };
+
+        if success == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut notes = Vec::with_capacity(results.num_results as usize);
+
+        for i in 0..results.num_results as usize {
+            let result = &results.results[i];
+            if !result.note.is_null() {
+                let note = Note::new_transactional(
+                    result.note,
+                    result.note_size as usize,
+                    NoteKey::new(result.key.note_id),
+                    txn,
+                );
+                notes.push(note);
+            }
+        }
+
+        Ok(notes)
+    }
+
     /// Get the underlying pointer to the context in C
     pub fn as_ptr(&self) -> *mut bindings::ndb {
         self.refs.ndb
