@@ -32,6 +32,12 @@
 //!                 reaction.count()
 //!             );
 //!         }
+//!         NoteMetadataEntryVariant::Zap(zap) => {
+//!             println!("Verified Zaps: {} ({} msats)", zap.count(), zap.msats());
+//!         }
+//!         NoteMetadataEntryVariant::ZapUnverified(zap) => {
+//!             println!("Unverified Zaps: {} ({} msats)", zap.count(), zap.msats());
+//!         }
 //!         NoteMetadataEntryVariant::Unknown(_) => {
 //!             // Handle unknown entry types
 //!         }
@@ -94,6 +100,14 @@ pub struct CountsEntry<'a> {
 /// A metadata entry representing a specific reaction and its count
 /// (e.g., "❤️" - 5 times).
 pub struct ReactionEntry<'a> {
+    entry: NoteMetadataEntry<'a>,
+}
+
+/// A metadata entry representing zap data (count and total msats).
+///
+/// Used for both verified (`NDB_NOTE_META_ZAP`) and unverified
+/// (`NDB_NOTE_META_ZAP_UNVERIFIED`) zap entries.
+pub struct ZapEntry<'a> {
     entry: NoteMetadataEntry<'a>,
 }
 
@@ -161,6 +175,26 @@ impl<'a> CountsEntry<'a> {
     }
 }
 
+impl<'a> ZapEntry<'a> {
+    pub(crate) fn new(entry: NoteMetadataEntry<'a>) -> Self {
+        Self { entry }
+    }
+
+    pub fn as_ptr(&self) -> *mut bindings::ndb_note_meta_entry {
+        self.entry.as_ptr()
+    }
+
+    /// Number of zap events.
+    pub fn count(&self) -> u32 {
+        unsafe { *bindings::ndb_note_meta_zap_count(self.as_ptr()) }
+    }
+
+    /// Total amount in millisatoshis.
+    pub fn msats(&self) -> u64 {
+        unsafe { *bindings::ndb_note_meta_zap_msats(self.as_ptr()) }
+    }
+}
+
 /// An enumeration of the different types of note metadata entries.
 ///
 /// This is the item yielded when iterating over [`NoteMetadata`].
@@ -170,6 +204,12 @@ pub enum NoteMetadataEntryVariant<'a> {
 
     /// A specific reaction (e.g., "❤️") and its count.
     Reaction(ReactionEntry<'a>),
+
+    /// Verified zap count and total msats.
+    Zap(ZapEntry<'a>),
+
+    /// Unverified zap count and total msats.
+    ZapUnverified(ZapEntry<'a>),
 
     /// An entry of an unknown or unsupported type.
     Unknown(NoteMetadataEntry<'a>),
@@ -181,6 +221,11 @@ impl<'a> NoteMetadataEntryVariant<'a> {
             NoteMetadataEntryVariant::Counts(CountsEntry::new(entry))
         } else if entry.type_id() == bindings::ndb_metadata_type_NDB_NOTE_META_REACTION as u16 {
             NoteMetadataEntryVariant::Reaction(ReactionEntry::new(entry))
+        } else if entry.type_id() == bindings::ndb_metadata_type_NDB_NOTE_META_ZAP as u16 {
+            NoteMetadataEntryVariant::Zap(ZapEntry::new(entry))
+        } else if entry.type_id() == bindings::ndb_metadata_type_NDB_NOTE_META_ZAP_UNVERIFIED as u16
+        {
+            NoteMetadataEntryVariant::ZapUnverified(ZapEntry::new(entry))
         } else {
             NoteMetadataEntryVariant::Unknown(entry)
         }
@@ -204,6 +249,14 @@ pub struct Counts {
     pub quotes: u16,
     pub direct_replies: u16,
     pub reposts: u16,
+}
+
+/// A plain data struct used to create a zap metadata entry.
+///
+/// See [`NoteMetadataEntryBuf::zap`] and [`NoteMetadataEntryBuf::zap_unverified`].
+pub struct ZapData {
+    pub count: u32,
+    pub msats: u64,
 }
 
 impl<'a> NoteMetadataEntry<'a> {
@@ -275,14 +328,18 @@ impl bindings::ndb_note_meta_builder {
 }
 
 impl NoteMetadataEntryBuf {
+    fn zeroed_entry() -> bindings::ndb_note_meta_entry {
+        bindings::ndb_note_meta_entry {
+            type_: 0,
+            aux: bindings::ndb_note_meta_entry__bindgen_ty_2 { value: 0 },
+            aux2: bindings::ndb_note_meta_entry__bindgen_ty_1 { reposts: 0 },
+            payload: bindings::ndb_note_meta_entry__bindgen_ty_3 { value: 0 },
+        }
+    }
+
     pub fn counts(counts: &Counts) -> Self {
         let mut me = Self {
-            entry: bindings::ndb_note_meta_entry {
-                type_: 0,
-                aux: bindings::ndb_note_meta_entry__bindgen_ty_2 { value: 0 },
-                aux2: bindings::ndb_note_meta_entry__bindgen_ty_1 { reposts: 0 },
-                payload: bindings::ndb_note_meta_entry__bindgen_ty_3 { value: 0 },
-            },
+            entry: Self::zeroed_entry(),
         };
 
         unsafe {
@@ -294,6 +351,32 @@ impl NoteMetadataEntryBuf {
                 counts.thread_replies,
                 counts.reposts,
             );
+        };
+
+        me
+    }
+
+    /// Create a verified zap metadata entry.
+    pub fn zap(zap: &ZapData) -> Self {
+        let mut me = Self {
+            entry: Self::zeroed_entry(),
+        };
+
+        unsafe {
+            bindings::ndb_note_meta_zap_set(me.as_ptr(), zap.count, zap.msats);
+        };
+
+        me
+    }
+
+    /// Create an unverified zap metadata entry.
+    pub fn zap_unverified(zap: &ZapData) -> Self {
+        let mut me = Self {
+            entry: Self::zeroed_entry(),
+        };
+
+        unsafe {
+            bindings::ndb_note_meta_zap_unverified_set(me.as_ptr(), zap.count, zap.msats);
         };
 
         me
@@ -508,7 +591,9 @@ mod tests {
                         assert!(reaction.count() == 1);
                     }
 
-                    NoteMetadataEntryVariant::Unknown(_) => {
+                    NoteMetadataEntryVariant::Zap(_)
+                    | NoteMetadataEntryVariant::ZapUnverified(_)
+                    | NoteMetadataEntryVariant::Unknown(_) => {
                         assert!(false);
                     }
                 }
@@ -520,5 +605,127 @@ mod tests {
         }
 
         test_util::cleanup_db(&db);
+    }
+
+    #[test]
+    fn test_zap_entry_roundtrip() {
+        let zap_data = ZapData {
+            count: 42,
+            msats: 2_100_000,
+        };
+        let mut entry = NoteMetadataEntryBuf::zap(&zap_data);
+
+        let mut builder = NoteMetadataBuilder::new();
+        builder.add_entry(entry.borrow());
+        let meta_buf = builder.build();
+
+        let meta = NoteMetadata::new(unsafe {
+            &*(meta_buf.buf.as_ptr() as *const bindings::ndb_note_meta)
+        });
+        assert_eq!(meta.count(), 1);
+
+        for variant in meta {
+            match variant {
+                NoteMetadataEntryVariant::Zap(zap) => {
+                    assert_eq!(zap.count(), 42);
+                    assert_eq!(zap.msats(), 2_100_000);
+                }
+                _ => panic!("expected Zap variant"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_zap_unverified_entry_roundtrip() {
+        let zap_data = ZapData {
+            count: 7,
+            msats: 500_000,
+        };
+        let mut entry = NoteMetadataEntryBuf::zap_unverified(&zap_data);
+
+        let mut builder = NoteMetadataBuilder::new();
+        builder.add_entry(entry.borrow());
+        let meta_buf = builder.build();
+
+        let meta = NoteMetadata::new(unsafe {
+            &*(meta_buf.buf.as_ptr() as *const bindings::ndb_note_meta)
+        });
+        assert_eq!(meta.count(), 1);
+
+        for variant in meta {
+            match variant {
+                NoteMetadataEntryVariant::ZapUnverified(zap) => {
+                    assert_eq!(zap.count(), 7);
+                    assert_eq!(zap.msats(), 500_000);
+                }
+                _ => panic!("expected ZapUnverified variant"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_mixed_metadata_with_zaps() {
+        let counts_data = Counts {
+            total_reactions: 10,
+            thread_replies: 5,
+            quotes: 2,
+            direct_replies: 3,
+            reposts: 1,
+        };
+        let zap_data = ZapData {
+            count: 3,
+            msats: 21_000_000,
+        };
+        let unverified_zap_data = ZapData {
+            count: 1,
+            msats: 1_000,
+        };
+
+        let mut counts_entry = NoteMetadataEntryBuf::counts(&counts_data);
+        let mut zap_entry = NoteMetadataEntryBuf::zap(&zap_data);
+        let mut unverified_entry = NoteMetadataEntryBuf::zap_unverified(&unverified_zap_data);
+
+        let mut builder = NoteMetadataBuilder::new();
+        builder.add_entry(counts_entry.borrow());
+        builder.add_entry(zap_entry.borrow());
+        builder.add_entry(unverified_entry.borrow());
+        let meta_buf = builder.build();
+
+        let meta = NoteMetadata::new(unsafe {
+            &*(meta_buf.buf.as_ptr() as *const bindings::ndb_note_meta)
+        });
+        assert_eq!(meta.count(), 3);
+
+        let mut saw_counts = false;
+        let mut saw_zap = false;
+        let mut saw_unverified = false;
+
+        for variant in meta {
+            match variant {
+                NoteMetadataEntryVariant::Counts(counts) => {
+                    assert_eq!(counts.reactions(), 10);
+                    assert_eq!(counts.thread_replies(), 5);
+                    assert_eq!(counts.quotes(), 2);
+                    assert_eq!(counts.direct_replies(), 3);
+                    assert_eq!(counts.reposts(), 1);
+                    saw_counts = true;
+                }
+                NoteMetadataEntryVariant::Zap(zap) => {
+                    assert_eq!(zap.count(), 3);
+                    assert_eq!(zap.msats(), 21_000_000);
+                    saw_zap = true;
+                }
+                NoteMetadataEntryVariant::ZapUnverified(zap) => {
+                    assert_eq!(zap.count(), 1);
+                    assert_eq!(zap.msats(), 1_000);
+                    saw_unverified = true;
+                }
+                _ => panic!("unexpected variant"),
+            }
+        }
+
+        assert!(saw_counts, "missing Counts entry");
+        assert!(saw_zap, "missing Zap entry");
+        assert!(saw_unverified, "missing ZapUnverified entry");
     }
 }

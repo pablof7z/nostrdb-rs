@@ -168,6 +168,20 @@ impl Ndb {
         }
     }
 
+    /// Reprocess kind-1080 PNS events that arrived before keys were registered.
+    pub fn process_pns(&self, txn: &Transaction) {
+        unsafe {
+            bindings::ndb_process_pns(self.as_ptr(), txn.as_mut_ptr());
+        }
+    }
+
+    /// Verify a zap note by its ID. Returns `true` if the zap is valid.
+    pub fn verify_zap(&self, txn: &Transaction, zap_note_id: &[u8; 32]) -> bool {
+        unsafe {
+            bindings::ndb_verify_zap(self.as_ptr(), txn.as_mut_ptr(), zap_note_id.as_ptr()) != 0
+        }
+    }
+
     /// Add a secret key to nostrdb's note ingester threads so that
     /// nostrdb can unwrap incoming giftwraps.
     pub fn add_key(&self, key: &[u8; 32]) -> bool {

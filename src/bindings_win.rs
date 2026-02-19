@@ -2507,6 +2507,8 @@ pub struct bolt11 {
 pub const ndb_metadata_type_NDB_NOTE_META_RESERVED: ndb_metadata_type = 0;
 pub const ndb_metadata_type_NDB_NOTE_META_COUNTS: ndb_metadata_type = 100;
 pub const ndb_metadata_type_NDB_NOTE_META_REACTION: ndb_metadata_type = 200;
+pub const ndb_metadata_type_NDB_NOTE_META_ZAP: ndb_metadata_type = 300;
+pub const ndb_metadata_type_NDB_NOTE_META_ZAP_UNVERIFIED: ndb_metadata_type = 302;
 pub type ndb_metadata_type = ::std::os::raw::c_int;
 pub const ndb_decrypt_result_NIP44_OK: ndb_decrypt_result = 0;
 pub const ndb_decrypt_result_NIP44_ERR_UNSUPPORTED_ENCODING: ndb_decrypt_result = 1;
