@@ -598,6 +598,29 @@ impl Ndb {
         }
     }
 
+    /// Like [`Ndb::wait_for_notes`], but accumulates notes from the
+    /// subscription stream until exactly `num_notes` have been collected.
+    /// `wait_for_notes` returns as soon as *any* notes are available;
+    /// this function keeps awaiting until the target count is reached.
+    pub async fn wait_for_all_notes(
+        &self,
+        sub_id: Subscription,
+        num_notes: u32,
+    ) -> Result<Vec<NoteKey>> {
+        let mut stream =
+            SubscriptionStream::new(self.clone(), sub_id).notes_per_await(num_notes);
+        let mut all_notes = Vec::new();
+
+        while all_notes.len() < num_notes as usize {
+            match stream.next().await {
+                Some(notes) => all_notes.extend(notes),
+                None => return Err(Error::SubscriptionError),
+            }
+        }
+
+        Ok(all_notes)
+    }
+
     pub fn get_profile_by_key<'a>(
         &self,
         transaction: &'a Transaction,
@@ -959,10 +982,10 @@ mod tests {
             let filters = vec![filter];
 
             let sub = ndb.subscribe(&filters).expect("sub_id");
-            let waiter = ndb.wait_for_notes(sub, 2);
+            let waiter = ndb.wait_for_all_notes(sub, 2);
             ndb.process_event(r#"["EVENT","b",{"id": "702555e52e82cc24ad517ba78c21879f6e47a7c0692b9b20df147916ae8731a3","pubkey": "32bf915904bfde2d136ba45dde32c88f4aca863783999faea2e847a8fafd2f15","created_at": 1702675561,"kind": 1,"tags": [],"content": "hello, world","sig": "2275c5f5417abfd644b7bc74f0388d70feb5d08b6f90fa18655dda5c95d013bfbc5258ea77c05b7e40e0ee51d8a2efa931dc7a0ec1db4c0a94519762c6625675"}]"#).expect("process ok");
             ndb.process_event(r#"["EVENT","b",{"id":"2e577580420c4ef02e8067aa842dd068be7c957f81a32b325fa1849b1650d98b","pubkey":"e586b8d54cfecacf251c71d0b2d9b01673c8870fb3fe82a20ce5afc44ce7fccc","created_at":1768414963,"kind":1,"tags":[],"content":"hi","sig":"662d45856ffc66c32df33ce5e8b7b9de14981774679b36bdb787bb8feda22b47eee7257756b915f7d54a53317151b0907a40847c635c9626debfb2a7b038c76f"}]"#).expect("process ok");
-            let _ = waiter.await.expect("await ok");
+            waiter.await.expect("await ok");
             let txn = Transaction::new(&ndb).expect("txn");
             let res = ndb.count(&txn, &filters).expect("query ok");
             assert_eq!(res, 2);
@@ -981,10 +1004,10 @@ mod tests {
             let filters = vec![filter];
 
             let sub = ndb.subscribe(&filters).expect("sub_id");
-            let waiter = ndb.wait_for_notes(sub, 2);
+            let waiter = ndb.wait_for_all_notes(sub, 2);
             ndb.process_event(r#"["EVENT","b",{"id": "702555e52e82cc24ad517ba78c21879f6e47a7c0692b9b20df147916ae8731a3","pubkey": "32bf915904bfde2d136ba45dde32c88f4aca863783999faea2e847a8fafd2f15","created_at": 1702675561,"kind": 1,"tags": [],"content": "hello, world","sig": "2275c5f5417abfd644b7bc74f0388d70feb5d08b6f90fa18655dda5c95d013bfbc5258ea77c05b7e40e0ee51d8a2efa931dc7a0ec1db4c0a94519762c6625675"}]"#).expect("process ok");
             ndb.process_event(r#"["EVENT","b",{"id":"2e577580420c4ef02e8067aa842dd068be7c957f81a32b325fa1849b1650d98b","pubkey":"e586b8d54cfecacf251c71d0b2d9b01673c8870fb3fe82a20ce5afc44ce7fccc","created_at":1768414963,"kind":1,"tags":[],"content":"hi","sig":"662d45856ffc66c32df33ce5e8b7b9de14981774679b36bdb787bb8feda22b47eee7257756b915f7d54a53317151b0907a40847c635c9626debfb2a7b038c76f"}]"#).expect("process ok");
-            let _ = waiter.await.expect("await ok");
+            waiter.await.expect("await ok");
             let txn = Transaction::new(&ndb).expect("txn");
             let total = ndb
                 .fold(&txn, &filters, 0usize, |acc, note| {
@@ -1007,10 +1030,10 @@ mod tests {
             let filters = vec![filter];
 
             let sub = ndb.subscribe(&filters).expect("sub_id");
-            let waiter = ndb.wait_for_notes(sub, 2);
+            let waiter = ndb.wait_for_all_notes(sub, 2);
             ndb.process_event(r#"["EVENT","b",{"id": "702555e52e82cc24ad517ba78c21879f6e47a7c0692b9b20df147916ae8731a3","pubkey": "32bf915904bfde2d136ba45dde32c88f4aca863783999faea2e847a8fafd2f15","created_at": 1702675561,"kind": 1,"tags": [],"content": "hello, world","sig": "2275c5f5417abfd644b7bc74f0388d70feb5d08b6f90fa18655dda5c95d013bfbc5258ea77c05b7e40e0ee51d8a2efa931dc7a0ec1db4c0a94519762c6625675"}]"#).expect("process ok");
             ndb.process_event(r#"["EVENT","b",{"id":"2e577580420c4ef02e8067aa842dd068be7c957f81a32b325fa1849b1650d98b","pubkey":"e586b8d54cfecacf251c71d0b2d9b01673c8870fb3fe82a20ce5afc44ce7fccc","created_at":1768414963,"kind":1,"tags":[],"content":"hi","sig":"662d45856ffc66c32df33ce5e8b7b9de14981774679b36bdb787bb8feda22b47eee7257756b915f7d54a53317151b0907a40847c635c9626debfb2a7b038c76f"}]"#).expect("process ok");
-            let _ = waiter.await.expect("await ok");
+            waiter.await.expect("await ok");
             let txn = Transaction::new(&ndb).expect("txn");
             let note = ndb
                 .try_fold(&txn, &filters, None, |_acc, note| {
@@ -1038,10 +1061,10 @@ mod tests {
             let filters = vec![filter];
 
             let sub = ndb.subscribe(&filters).expect("sub_id");
-            let waiter = ndb.wait_for_notes(sub, 2);
+            let waiter = ndb.wait_for_all_notes(sub, 2);
             ndb.process_event(r#"["EVENT","b",{"id": "702555e52e82cc24ad517ba78c21879f6e47a7c0692b9b20df147916ae8731a3","pubkey": "32bf915904bfde2d136ba45dde32c88f4aca863783999faea2e847a8fafd2f15","created_at": 1702675561,"kind": 1,"tags": [],"content": "hello, world","sig": "2275c5f5417abfd644b7bc74f0388d70feb5d08b6f90fa18655dda5c95d013bfbc5258ea77c05b7e40e0ee51d8a2efa931dc7a0ec1db4c0a94519762c6625675"}]"#).expect("process ok");
             ndb.process_event(r#"["EVENT","b",{"id":"2e577580420c4ef02e8067aa842dd068be7c957f81a32b325fa1849b1650d98b","pubkey":"e586b8d54cfecacf251c71d0b2d9b01673c8870fb3fe82a20ce5afc44ce7fccc","created_at":1768414963,"kind":1,"tags":[],"content":"hi","sig":"662d45856ffc66c32df33ce5e8b7b9de14981774679b36bdb787bb8feda22b47eee7257756b915f7d54a53317151b0907a40847c635c9626debfb2a7b038c76f"}]"#).expect("process ok");
-            let _ = waiter.await.expect("await ok");
+            waiter.await.expect("await ok");
             let txn = Transaction::new(&ndb).expect("txn");
             let note = ndb
                 .find_map(&txn, &filters, |note| {
