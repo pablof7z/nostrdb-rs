@@ -2642,6 +2642,28 @@ extern "C" {
     ) -> ndb_decrypt_result;
 }
 extern "C" {
+    pub fn nip44_decrypt_with_key(
+        conversation_key: *const ::std::os::raw::c_uchar,
+        payload: *const ::std::os::raw::c_char,
+        payload_len: usize,
+        buf: *mut ::std::os::raw::c_uchar,
+        bufsize: usize,
+        decrypted: *mut *mut ::std::os::raw::c_uchar,
+        decrypted_len: *mut u16,
+    ) -> ndb_decrypt_result;
+}
+extern "C" {
+    pub fn nip44_encrypt_with_key(
+        conversation_key: *const ::std::os::raw::c_uchar,
+        plaintext: *const ::std::os::raw::c_uchar,
+        plaintext_size: u16,
+        buf: *mut ::std::os::raw::c_uchar,
+        bufsize: usize,
+        out: *mut *mut ::std::os::raw::c_char,
+        out_len: *mut isize,
+    ) -> ndb_decrypt_result;
+}
+extern "C" {
     pub fn nip44_err_msg(res: ndb_decrypt_result) -> *const ::std::os::raw::c_char;
 }
 #[repr(C)]
@@ -5835,6 +5857,16 @@ extern "C" {
     pub fn ndb_process_giftwraps(arg1: *mut ndb, arg2: *mut ndb_txn) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn ndb_process_pns(arg1: *mut ndb, arg2: *mut ndb_txn) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ndb_verify_zap(
+        ndb: *mut ndb,
+        txn: *mut ndb_txn,
+        zap_note_id: *const ::std::os::raw::c_uchar,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn ndb_process_events_with(
         ndb: *mut ndb,
         ldjson: *const ::std::os::raw::c_char,
@@ -6347,6 +6379,28 @@ extern "C" {
         entry: *mut ndb_note_meta_entry,
         count: u32,
         str_: ndb_reaction_str,
+    );
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_count(entry: *mut ndb_note_meta_entry) -> *mut u32;
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_msats(entry: *mut ndb_note_meta_entry) -> *mut u64;
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_set(entry: *mut ndb_note_meta_entry, count: u32, msats: u64);
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_unverified_count(entry: *mut ndb_note_meta_entry) -> *mut u32;
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_unverified_msats(entry: *mut ndb_note_meta_entry) -> *mut u64;
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_unverified_set(
+        entry: *mut ndb_note_meta_entry,
+        count: u32,
+        msats: u64,
     );
 }
 extern "C" {
@@ -6943,6 +6997,7 @@ fn bindgen_test_layout_ndb_note_meta() {
 }
 pub const ndb_note_meta_flags_NDB_NOTE_META_FLAG_DELETED: ndb_note_meta_flags = 0;
 pub const ndb_note_meta_flags_NDB_NOTE_META_FLAG_SEEN: ndb_note_meta_flags = 2;
+pub const ndb_note_meta_flags_NDB_NOTE_META_FLAG_ZAP_VERIFIED: ndb_note_meta_flags = 4;
 pub type ndb_note_meta_flags = ::std::os::raw::c_int;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
