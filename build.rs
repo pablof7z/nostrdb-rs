@@ -41,7 +41,7 @@ fn secp256k1_build(base_config: &mut Build) {
     //base_config.compile("libsecp256k1.a");
 }
 
-/// bolt11 deps with portability issues, exclude these on windows build
+/// bolt11 deps (CCAN + bolt11 parser)
 fn bolt11_deps() -> &'static [&'static str] {
     &[
         "nostrdb/ccan/ccan/likely/likely.c",
@@ -136,17 +136,16 @@ fn main() {
         }
     }
 
-    // Link Security framework on macOS
-    if !cfg!(target_os = "windows") {
-        build.files(bolt11_deps());
+    build.files(bolt11_deps());
+
+    if cfg!(target_os = "windows") {
+        println!("cargo:rustc-link-lib=bcrypt");
+    } else {
         build
             .flag("-Wno-sign-compare")
             .flag("-Wno-misleading-indentation")
             .flag("-Wno-unused-function")
             .flag("-Wno-unused-parameter");
-    } else {
-        // need this on windows
-        println!("cargo:rustc-link-lib=bcrypt");
     }
 
     if env::var("PROFILE").unwrap() == "debug" {
