@@ -80,24 +80,52 @@ impl Stream for SubscriptionStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let pinned = std::pin::pin!(self);
         let me = pinned.as_ref().get_ref();
-        let mut map = me.ndb.subs.lock().unwrap();
-        let sub_state = map.entry(me.sub_id).or_insert(SubscriptionState {
-            done: false,
-            waker: None,
-        });
 
-        // we've unsubscribed
-        if sub_state.done {
-            return Poll::Ready(None);
+        // Check if we've been unsubscribed while holding the lock,
+        // but drop it before the FFI call to avoid deadlocking with
+        // the C ingester thread's subscription callback.
+        {
+            let map = me.ndb.subs.lock().unwrap();
+            if let Some(sub_state) = map.get(&me.sub_id) {
+                if sub_state.done {
+                    return Poll::Ready(None);
+                }
+            }
         }
 
+        // Poll for notes without holding the Rust mutex. The C function
+        // ndb_poll_for_notes may acquire nostrdb's internal subscription
+        // mutex, and the ingester callback acquires our Rust subs mutex,
+        // so holding both simultaneously would deadlock.
         let notes = me.ndb.poll_for_notes(me.sub_id, me.max_notes);
         if !notes.is_empty() {
             return Poll::Ready(Some(notes));
         }
 
-        // Not ready yet, store waker
-        sub_state.waker = Some(cx.waker().clone());
-        std::task::Poll::Pending
+        // Re-acquire the lock to store the waker
+        {
+            let mut map = me.ndb.subs.lock().unwrap();
+            let sub_state = map.entry(me.sub_id).or_insert(SubscriptionState {
+                done: false,
+                waker: None,
+            });
+
+            if sub_state.done {
+                return Poll::Ready(None);
+            }
+
+            sub_state.waker = Some(cx.waker().clone());
+        }
+
+        // Poll again after registering the waker to close the race window.
+        // An event may have arrived between our first poll_for_notes and
+        // storing the waker — the callback would have found no waker to
+        // trigger. This second poll catches that case.
+        let notes = me.ndb.poll_for_notes(me.sub_id, me.max_notes);
+        if !notes.is_empty() {
+            return Poll::Ready(Some(notes));
+        }
+
+        Poll::Pending
     }
 }
