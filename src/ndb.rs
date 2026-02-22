@@ -1412,12 +1412,14 @@ mod tests {
         test_util::cleanup_db(&db);
     }
 
-    /// Stress test: blast events through the ingester while concurrently
-    /// polling a subscription stream. Before the poll_next deadlock fix,
-    /// this would hang because poll_next held the Rust subs mutex while
-    /// calling ndb_poll_for_notes (which acquires the C subscription
-    /// mutex), while the ingester callback held the C mutex and tried
-    /// to acquire the Rust mutex.
+    /// Regression test for the poll_next deadlock.
+    ///
+    /// Submits events from a background task while the main task polls
+    /// a subscription stream, with sleeps between submissions so the
+    /// stream is actively waiting (waker registered) when the ingester
+    /// callback fires. This is the pattern that triggered the original
+    /// deadlock where poll_next held the Rust subs mutex during the
+    /// ndb_poll_for_notes FFI call.
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn concurrent_ingest_and_poll_does_not_deadlock() {
         let db = "target/testdbs/deadlock_stress";
@@ -1426,16 +1428,12 @@ mod tests {
         {
             let ndb = Ndb::new(db, &Config::new()).expect("ndb");
 
-            let filter = Filter::new().kinds(vec![1, 7]).build();
+            let filter = Filter::new().kinds(vec![1]).build();
             let sub_id = ndb.subscribe(&[filter]).expect("sub_id");
             let mut stream = sub_id.stream(&ndb).notes_per_await(1);
 
-            // A pool of distinct signed events to feed through the ingester.
-            // These must have valid IDs and signatures (the ID is a hash of
-            // the serialized event including content, so truncated content
-            // will cause silent rejection).
             let events: Vec<&str> = vec![
-                r#"["EVENT","b",{"id": "702555e52e82cc24ad517ba78c21879f6e47a7c0692b9b20df147916ae8731a3","pubkey": "32bf915904bfde2d136ba45dde32c88f4aca863783999faea2e847a8fafd2f15","created_at": 1702675561,"kind": 1,"tags": [],"content": "hello, world","sig": "2275c5f5417abfd644b7bc74f0388d70feb5d08b6f90fa18655dda5c95d013bfbc5258ea77c05b7e40e0ee51d8a2efa931dc7a0ec1db4c0a94519762c6625675"}]"#,
+                r#"["EVENT","b",{"id":"702555e52e82cc24ad517ba78c21879f6e47a7c0692b9b20df147916ae8731a3","pubkey":"32bf915904bfde2d136ba45dde32c88f4aca863783999faea2e847a8fafd2f15","created_at":1702675561,"kind":1,"tags":[],"content":"hello, world","sig":"2275c5f5417abfd644b7bc74f0388d70feb5d08b6f90fa18655dda5c95d013bfbc5258ea77c05b7e40e0ee51d8a2efa931dc7a0ec1db4c0a94519762c6625675"}]"#,
                 r#"["EVENT","b",{"id":"d379f55b520a9b2442556917e2cc7b7c16bfe3f4f08856dcc5735eadb2706267","pubkey":"850605096dbfb50b929e38a6c26c3d56c425325c85e05de29b759bc0e5d6cebc","created_at":1720482500,"kind":1,"tags":[["p","5e7ae588d7d11eac4c25906e6da807e68c6498f49a38e4692be5a089616ceb18"]],"content":"@npub1teawtzxh6y02cnp9jphxm2q8u6xxfx85nguwg6ftuksgjctvavvqnsgq5u Verifying My Public Key: \"ksedgwic\"\n","sig":"3e8683490d951e0f5b3b59835063684d3d159322394d2aad3ee027890dcf8d9ff337027f07ec9c5f9799195466723bc459c67fbf3c902ad40a6b51bcb45d3feb"}]"#,
                 r#"["EVENT","b",{"id":"8600bdc1f35ec4662b32609e93cc51a42e5ea9f6b8d656ca9d6b541310052885","pubkey":"dcdc0e77fe223f3f62a476578350133ca97767927df676ca7ca7b92a413a7703","created_at":1734636009,"kind":1,"tags":[],"content":"testing blocked pubkey","sig":"e8949493d81474085cd084d3b81e48b1673fcb2c738a9e7c130915fc85944e787885577b71be6a0822df10f7e823229417774d1e6a66e5cfac9d151f460a5291"}]"#,
                 r#"["EVENT","b",{"id":"e3ba832d4399528beb1c677a50d139c94e67220600dd424eb3ad3fa673a45dd5","pubkey":"850605096dbfb50b929e38a6c26c3d56c425325c85e05de29b759bc0e5d6cebc","created_at":1735920949,"kind":1,"tags":[["e","83e37c70a84df8a9b1fe85df15fb892a3852f3a9acc8f9af34449772b1cb07f3","","root"],["e","a3ed05a377b1c1f460fa4e9c2dd393e9563dd2da6955d48287847278d1039277","","reply"],["p","37f2654c028c224b36507facf80c62d53b6c2eebb8d5590aa238d71d3c48723a"],["p","d4bad8c24d4bee499afb08830e71dd103e61e007556d20ba2ef3867fb57136de"],["r","https://meshtastic.org/docs/hardware/devices/"]],"content":"I think anything on this list that runs stock meshtastic should work. You do need a USB connection for the early proof of concept \nhttps://meshtastic.org/docs/hardware/devices/\n\nOthers might have better advice about which are the best though","sig":"85318ea5b83c3316063be82a6e45180767e9ea6b114d0a181dde7d4dc040f2c7f86f8750cc106b66bf666a4ac2debfd8b07c986b7814a715e3ea1cb42626cc68"}]"#,
@@ -1445,27 +1443,19 @@ mod tests {
 
             let num_events = events.len();
 
-            // Spawn a task that hammers the ingester with events
+            // Submit events from a background task with sleeps between
+            // each one, so the stream has time to register its waker
+            // and is actively waiting when the ingester callback fires.
             let ingest_ndb = ndb.clone();
             let ingester = tokio::spawn(async move {
-                // Re-submit the same events many times. Even though nostrdb
-                // deduplicates by id, the ingester still processes each
-                // submission and fires the subscription callback, which is
-                // what creates the mutex contention.
-                for round in 0..200 {
-                    for event in &events {
-                        let _ = ingest_ndb.process_event(event);
-                    }
-                    // Yield occasionally to let the poller run
-                    if round % 10 == 0 {
-                        tokio::task::yield_now().await;
-                    }
+                for event in &events {
+                    sleep(Duration::from_millis(50)).await;
+                    ingest_ndb.process_event(event).expect("process ok");
                 }
             });
 
-            // Concurrently poll the stream. We should receive at least
-            // the unique events. If the old deadlock exists, this will
-            // hang and the timeout will fire.
+            // Concurrently poll the stream. If the old deadlock exists,
+            // stream.next() will hang and the timeout fires.
             let result = time::timeout(Duration::from_secs(5), async {
                 let mut received = 0;
                 while received < num_events {
@@ -1487,7 +1477,9 @@ mod tests {
                     );
                 }
                 Err(_) => {
-                    panic!("deadlock: stream.next() hung while ingester was processing events")
+                    panic!(
+                        "timed out waiting for stream — possible deadlock in poll_next"
+                    )
                 }
             }
         }
