@@ -1477,9 +1477,7 @@ mod tests {
                     );
                 }
                 Err(_) => {
-                    panic!(
-                        "timed out waiting for stream — possible deadlock in poll_next"
-                    )
+                    panic!("timed out waiting for stream — possible deadlock in poll_next")
                 }
             }
         }
