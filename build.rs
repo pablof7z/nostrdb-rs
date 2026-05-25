@@ -123,10 +123,22 @@ fn main() {
         build.flag("-O1");
     }
 
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+
+    // Apple targets: use pthread process-shared mutexes instead of POSIX named
+    // semaphores.  POSIX named semaphores persist across crashes; the macOS
+    // kernel table fills up (kern.posix.sem.max=10000) and causes every
+    // subsequent mdb_env_open to fail with ENOSPC.  Pthread mutexes in a
+    // MAP_SHARED mmap region work on macOS 10.9+ and keep LMDB reader-table
+    // tracking intact (which MDB_NOLOCK would bypass, causing use-after-free).
+    let target_vendor = env::var("CARGO_CFG_TARGET_VENDOR").unwrap_or_default();
+    if target_vendor == "apple" {
+        build.define("MDB_SKIP_POSIX_SEM", None);
+    }
+
     // iOS-specific: disable stack checking to avoid ___chkstk_darwin linking errors
     // This symbol isn't available on iOS and causes linking failures for functions
     // with large stack frames
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os == "ios" {
         build.flag("-fno-stack-check");
         build.flag("-fno-stack-protector");
