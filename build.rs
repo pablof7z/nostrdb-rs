@@ -134,6 +134,12 @@ fn main() {
     let target_vendor = env::var("CARGO_CFG_TARGET_VENDOR").unwrap_or_default();
     if target_vendor == "apple" {
         build.define("MDB_SKIP_POSIX_SEM", None);
+        // Disable robust-mutex code: PTHREAD_MUTEX_ROBUST is not visible with
+        // default Apple SDK includes.  It's not needed because our flock-based
+        // instance lock guarantees single-opener semantics — if the previous
+        // process crashed, the next exclusive opener always reinitializes the
+        // mutex fresh, so crash recovery through the mutex itself is moot.
+        build.define("MDB_USE_ROBUST", Some("0"));
     }
 
     // iOS-specific: disable stack checking to avoid ___chkstk_darwin linking errors
