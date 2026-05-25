@@ -42,7 +42,7 @@ pub use future::SubscriptionStream;
 pub use ingest::IngestMetadata;
 pub use metadata::{
     Counts, CountsEntry, NoteMetadata, NoteMetadataBuf, NoteMetadataBuilder, NoteMetadataEntry,
-    NoteMetadataEntryBuf, NoteMetadataEntryVariant, ReactionEntry,
+    NoteMetadataEntryBuf, NoteMetadataEntryVariant, ReactionEntry, ZapData, ZapEntry,
 };
 pub use ndb::Ndb;
 pub use ndb_profile::{NdbProfile, NdbProfileRecord};

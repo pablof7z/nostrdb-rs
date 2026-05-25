@@ -353,6 +353,9 @@ pub const EWOULDBLOCK: u32 = 140;
 pub const _NLSCMPERROR: u32 = 2147483647;
 pub const NDB_PACKED_STR: u32 = 1;
 pub const NDB_PACKED_ID: u32 = 2;
+pub const NDB_NOTE_FLAG_DELETED: u32 = 1;
+pub const NDB_NOTE_FLAG_RUMOR: u32 = 2;
+pub const NDB_NOTE_FLAG_UNWRAPPED: u32 = 4;
 pub const NDB_FLAG_NOMIGRATE: u32 = 1;
 pub const NDB_FLAG_SKIP_NOTE_VERIFY: u32 = 2;
 pub const NDB_FLAG_NO_FULLTEXT: u32 = 4;
@@ -2504,7 +2507,165 @@ pub struct bolt11 {
 pub const ndb_metadata_type_NDB_NOTE_META_RESERVED: ndb_metadata_type = 0;
 pub const ndb_metadata_type_NDB_NOTE_META_COUNTS: ndb_metadata_type = 100;
 pub const ndb_metadata_type_NDB_NOTE_META_REACTION: ndb_metadata_type = 200;
+pub const ndb_metadata_type_NDB_NOTE_META_ZAP: ndb_metadata_type = 300;
+pub const ndb_metadata_type_NDB_NOTE_META_ZAP_UNVERIFIED: ndb_metadata_type = 302;
 pub type ndb_metadata_type = ::std::os::raw::c_int;
+pub const ndb_decrypt_result_NIP44_OK: ndb_decrypt_result = 0;
+pub const ndb_decrypt_result_NIP44_ERR_UNSUPPORTED_ENCODING: ndb_decrypt_result = 1;
+pub const ndb_decrypt_result_NIP44_ERR_INVALID_PAYLOAD: ndb_decrypt_result = 2;
+pub const ndb_decrypt_result_NIP44_ERR_BASE64_DECODE: ndb_decrypt_result = 3;
+pub const ndb_decrypt_result_NIP44_ERR_SECKEY_VERIFY_FAILED: ndb_decrypt_result = 4;
+pub const ndb_decrypt_result_NIP44_ERR_PUBKEY_PARSE_FAILED: ndb_decrypt_result = 5;
+pub const ndb_decrypt_result_NIP44_ERR_ECDH_FAILED: ndb_decrypt_result = 6;
+pub const ndb_decrypt_result_NIP44_ERR_FILL_RANDOM_FAILED: ndb_decrypt_result = 7;
+pub const ndb_decrypt_result_NIP44_ERR_INVALID_MAC: ndb_decrypt_result = 8;
+pub const ndb_decrypt_result_NIP44_ERR_INVALID_PADDING: ndb_decrypt_result = 9;
+pub const ndb_decrypt_result_NIP44_ERR_BUFFER_TOO_SMALL: ndb_decrypt_result = 10;
+pub type ndb_decrypt_result = ::std::os::raw::c_int;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct nip44_payload {
+    pub version: ::std::os::raw::c_uchar,
+    pub nonce: *mut ::std::os::raw::c_uchar,
+    pub ciphertext: *mut ::std::os::raw::c_uchar,
+    pub ciphertext_len: usize,
+    pub mac: *mut ::std::os::raw::c_uchar,
+}
+#[test]
+fn bindgen_test_layout_nip44_payload() {
+    const UNINIT: ::std::mem::MaybeUninit<nip44_payload> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<nip44_payload>(),
+        40usize,
+        concat!("Size of: ", stringify!(nip44_payload))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<nip44_payload>(),
+        8usize,
+        concat!("Alignment of ", stringify!(nip44_payload))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).version) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(nip44_payload),
+            "::",
+            stringify!(version)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).nonce) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(nip44_payload),
+            "::",
+            stringify!(nonce)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).ciphertext) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(nip44_payload),
+            "::",
+            stringify!(ciphertext)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).ciphertext_len) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(nip44_payload),
+            "::",
+            stringify!(ciphertext_len)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).mac) as usize - ptr as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(nip44_payload),
+            "::",
+            stringify!(mac)
+        )
+    );
+}
+extern "C" {
+    pub fn nip44_decrypt(
+        secp_context: *mut ::std::os::raw::c_void,
+        sender_pubkey: *const ::std::os::raw::c_uchar,
+        receiver_seckey: *const ::std::os::raw::c_uchar,
+        payload: *const ::std::os::raw::c_char,
+        payload_len: ::std::os::raw::c_int,
+        buf: *mut ::std::os::raw::c_uchar,
+        bufsize: usize,
+        decrypted: *mut *mut ::std::os::raw::c_uchar,
+        decrypted_len: *mut u16,
+    ) -> ndb_decrypt_result;
+}
+extern "C" {
+    pub fn nip44_encrypt(
+        secp: *mut ::std::os::raw::c_void,
+        sender_seckey: *const ::std::os::raw::c_uchar,
+        receiver_pubkey: *const ::std::os::raw::c_uchar,
+        plaintext: *const ::std::os::raw::c_uchar,
+        plaintext_size: u16,
+        buf: *mut ::std::os::raw::c_uchar,
+        bufsize: usize,
+        out: *mut *mut ::std::os::raw::c_char,
+        out_len: *mut isize,
+    ) -> ndb_decrypt_result;
+}
+extern "C" {
+    pub fn nip44_decrypt_raw(
+        secp: *mut ::std::os::raw::c_void,
+        sender_pubkey: *const ::std::os::raw::c_uchar,
+        receiver_seckey: *const ::std::os::raw::c_uchar,
+        decoded: *mut nip44_payload,
+        decrypted: *mut *mut ::std::os::raw::c_uchar,
+        decrypted_len: *mut u16,
+    ) -> ndb_decrypt_result;
+}
+extern "C" {
+    pub fn nip44_decode_payload(
+        decoded: *mut nip44_payload,
+        buf: *mut ::std::os::raw::c_uchar,
+        bufsize: usize,
+        payload: *const ::std::os::raw::c_char,
+        payload_len: usize,
+    ) -> ndb_decrypt_result;
+}
+extern "C" {
+    pub fn nip44_decrypt_with_key(
+        conversation_key: *const ::std::os::raw::c_uchar,
+        payload: *const ::std::os::raw::c_char,
+        payload_len: usize,
+        buf: *mut ::std::os::raw::c_uchar,
+        bufsize: usize,
+        decrypted: *mut *mut ::std::os::raw::c_uchar,
+        decrypted_len: *mut u16,
+    ) -> ndb_decrypt_result;
+}
+extern "C" {
+    pub fn nip44_encrypt_with_key(
+        conversation_key: *const ::std::os::raw::c_uchar,
+        plaintext: *const ::std::os::raw::c_uchar,
+        plaintext_size: u16,
+        buf: *mut ::std::os::raw::c_uchar,
+        bufsize: usize,
+        out: *mut *mut ::std::os::raw::c_char,
+        out_len: *mut isize,
+    ) -> ndb_decrypt_result;
+}
+extern "C" {
+    pub fn nip44_err_msg(res: ndb_decrypt_result) -> *const ::std::os::raw::c_char;
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ndb_tag_ptr {
@@ -2974,6 +3135,64 @@ pub type ndb_id_fn = ::std::option::Option<
 >;
 pub type ndb_sub_fn =
     ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void, subid: u64)>;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ndb_query_result {
+    pub note: *mut ndb_note,
+    pub note_size: u64,
+    pub note_id: u64,
+}
+#[test]
+fn bindgen_test_layout_ndb_query_result() {
+    const UNINIT: ::std::mem::MaybeUninit<ndb_query_result> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<ndb_query_result>(),
+        24usize,
+        concat!("Size of: ", stringify!(ndb_query_result))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<ndb_query_result>(),
+        8usize,
+        concat!("Alignment of ", stringify!(ndb_query_result))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).note) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_result),
+            "::",
+            stringify!(note)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).note_size) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_result),
+            "::",
+            stringify!(note_size)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).note_id) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_result),
+            "::",
+            stringify!(note_id)
+        )
+    );
+}
+pub type ndb_visitor_fn = ::std::option::Option<
+    unsafe extern "C" fn(
+        ctx: *mut ::std::os::raw::c_void,
+        res: *mut ndb_query_result,
+    ) -> ndb_visitor_action,
+>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ndb_id_cb {
@@ -5281,58 +5500,12 @@ fn bindgen_test_layout_ndb_block_iterator() {
         )
     );
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct ndb_query_result {
-    pub note: *mut ndb_note,
-    pub note_size: u64,
-    pub note_id: u64,
-}
-#[test]
-fn bindgen_test_layout_ndb_query_result() {
-    const UNINIT: ::std::mem::MaybeUninit<ndb_query_result> = ::std::mem::MaybeUninit::uninit();
-    let ptr = UNINIT.as_ptr();
-    assert_eq!(
-        ::std::mem::size_of::<ndb_query_result>(),
-        24usize,
-        concat!("Size of: ", stringify!(ndb_query_result))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<ndb_query_result>(),
-        8usize,
-        concat!("Alignment of ", stringify!(ndb_query_result))
-    );
-    assert_eq!(
-        unsafe { ::std::ptr::addr_of!((*ptr).note) as usize - ptr as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(ndb_query_result),
-            "::",
-            stringify!(note)
-        )
-    );
-    assert_eq!(
-        unsafe { ::std::ptr::addr_of!((*ptr).note_size) as usize - ptr as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(ndb_query_result),
-            "::",
-            stringify!(note_size)
-        )
-    );
-    assert_eq!(
-        unsafe { ::std::ptr::addr_of!((*ptr).note_id) as usize - ptr as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(ndb_query_result),
-            "::",
-            stringify!(note_id)
-        )
-    );
-}
+pub const ndb_query_type_NDB_QUERY_TYPE_STANDARD: ndb_query_type = 1;
+pub const ndb_query_type_NDB_QUERY_TYPE_VISITOR: ndb_query_type = 2;
+pub type ndb_query_type = ::std::os::raw::c_int;
+pub const ndb_visitor_action_NDB_VISITOR_STOP: ndb_visitor_action = 0;
+pub const ndb_visitor_action_NDB_VISITOR_CONT: ndb_visitor_action = 1;
+pub type ndb_visitor_action = ::std::os::raw::c_int;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ndb_query_results {
@@ -5360,6 +5533,208 @@ fn bindgen_test_layout_ndb_query_results() {
             stringify!(ndb_query_results),
             "::",
             stringify!(cur)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ndb_query_state {
+    pub type_: ndb_query_type,
+    pub limit: u64,
+    pub __bindgen_anon_1: ndb_query_state__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ndb_query_state__bindgen_ty_1 {
+    pub query: ndb_query_state__bindgen_ty_1__bindgen_ty_1,
+    pub visitor: ndb_query_state__bindgen_ty_1__bindgen_ty_2,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ndb_query_state__bindgen_ty_1__bindgen_ty_1 {
+    pub capacity: ::std::os::raw::c_int,
+    pub results: ndb_query_results,
+}
+#[test]
+fn bindgen_test_layout_ndb_query_state__bindgen_ty_1__bindgen_ty_1() {
+    const UNINIT: ::std::mem::MaybeUninit<ndb_query_state__bindgen_ty_1__bindgen_ty_1> =
+        ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<ndb_query_state__bindgen_ty_1__bindgen_ty_1>(),
+        32usize,
+        concat!(
+            "Size of: ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_1)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<ndb_query_state__bindgen_ty_1__bindgen_ty_1>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_1)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).capacity) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_1),
+            "::",
+            stringify!(capacity)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).results) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_1),
+            "::",
+            stringify!(results)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ndb_query_state__bindgen_ty_1__bindgen_ty_2 {
+    pub visited: u64,
+    pub ctx: *mut ::std::os::raw::c_void,
+    pub done: ::std::os::raw::c_int,
+    pub visitor: ndb_visitor_fn,
+}
+#[test]
+fn bindgen_test_layout_ndb_query_state__bindgen_ty_1__bindgen_ty_2() {
+    const UNINIT: ::std::mem::MaybeUninit<ndb_query_state__bindgen_ty_1__bindgen_ty_2> =
+        ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<ndb_query_state__bindgen_ty_1__bindgen_ty_2>(),
+        32usize,
+        concat!(
+            "Size of: ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_2)
+        )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<ndb_query_state__bindgen_ty_1__bindgen_ty_2>(),
+        8usize,
+        concat!(
+            "Alignment of ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_2)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).visited) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_2),
+            "::",
+            stringify!(visited)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).ctx) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_2),
+            "::",
+            stringify!(ctx)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).done) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_2),
+            "::",
+            stringify!(done)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).visitor) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state__bindgen_ty_1__bindgen_ty_2),
+            "::",
+            stringify!(visitor)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout_ndb_query_state__bindgen_ty_1() {
+    const UNINIT: ::std::mem::MaybeUninit<ndb_query_state__bindgen_ty_1> =
+        ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<ndb_query_state__bindgen_ty_1>(),
+        32usize,
+        concat!("Size of: ", stringify!(ndb_query_state__bindgen_ty_1))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<ndb_query_state__bindgen_ty_1>(),
+        8usize,
+        concat!("Alignment of ", stringify!(ndb_query_state__bindgen_ty_1))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).query) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state__bindgen_ty_1),
+            "::",
+            stringify!(query)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).visitor) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state__bindgen_ty_1),
+            "::",
+            stringify!(visitor)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout_ndb_query_state() {
+    const UNINIT: ::std::mem::MaybeUninit<ndb_query_state> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<ndb_query_state>(),
+        48usize,
+        concat!("Size of: ", stringify!(ndb_query_state))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<ndb_query_state>(),
+        8usize,
+        concat!("Alignment of ", stringify!(ndb_query_state))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).type_) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state),
+            "::",
+            stringify!(type_)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).limit) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(ndb_query_state),
+            "::",
+            stringify!(limit)
         )
     );
 }
@@ -5439,6 +5814,17 @@ extern "C" {
     pub fn ndb_db_version(txn: *mut ndb_txn) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    #[doc = " Takes a snapshot of the NostrDB contents to a separate path\n See `mdb_env_copy2` header for documentation on `path` and `flags`"]
+    pub fn ndb_snapshot(
+        ndb: *mut ndb,
+        path: *const ::std::os::raw::c_char,
+        flags: ::std::os::raw::c_uint,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ndb_add_key(ndb: *mut ndb, key: *mut ::std::os::raw::c_uchar) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn ndb_process_event(
         arg1: *mut ndb,
         json: *const ::std::os::raw::c_char,
@@ -5465,6 +5851,19 @@ extern "C" {
         arg1: *mut ndb,
         ldjson: *const ::std::os::raw::c_char,
         len: usize,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ndb_process_giftwraps(arg1: *mut ndb, arg2: *mut ndb_txn) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ndb_process_pns(arg1: *mut ndb, arg2: *mut ndb_txn) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ndb_verify_zap(
+        ndb: *mut ndb,
+        txn: *mut ndb_txn,
+        zap_note_id: *const ::std::os::raw::c_uchar,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -5599,6 +5998,16 @@ extern "C" {
         arg1: *mut *mut ndb_note,
         buf: *mut ::std::os::raw::c_uchar,
         buflen: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ndb_note_from_json_custom(
+        json: *const ::std::os::raw::c_char,
+        len: ::std::os::raw::c_int,
+        arg1: *mut *mut ndb_note,
+        buf: *mut ::std::os::raw::c_uchar,
+        buflen: ::std::os::raw::c_int,
+        parse_cond: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -5854,6 +6263,15 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn ndb_query_visit(
+        txn: *mut ndb_txn,
+        filters: *mut ndb_filter,
+        num_filters: ::std::os::raw::c_int,
+        visitor: ndb_visitor_fn,
+        ctx: *mut ::std::os::raw::c_void,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn ndb_note_meta_builder_init(
         builder: *mut ndb_note_meta_builder,
         arg1: *mut ::std::os::raw::c_uchar,
@@ -5964,6 +6382,28 @@ extern "C" {
     );
 }
 extern "C" {
+    pub fn ndb_note_meta_zap_count(entry: *mut ndb_note_meta_entry) -> *mut u32;
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_msats(entry: *mut ndb_note_meta_entry) -> *mut u64;
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_set(entry: *mut ndb_note_meta_entry, count: u32, msats: u64);
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_unverified_count(entry: *mut ndb_note_meta_entry) -> *mut u32;
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_unverified_msats(entry: *mut ndb_note_meta_entry) -> *mut u64;
+}
+extern "C" {
+    pub fn ndb_note_meta_zap_unverified_set(
+        entry: *mut ndb_note_meta_entry,
+        count: u32,
+        msats: u64,
+    );
+}
+extern "C" {
     pub fn print_note_meta(meta: *mut ndb_note_meta);
 }
 extern "C" {
@@ -6019,6 +6459,18 @@ extern "C" {
 }
 extern "C" {
     pub fn ndb_str_len(str_: *mut ndb_str) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ndb_note_flags(arg1: *mut ndb_note) -> *mut u16;
+}
+extern "C" {
+    pub fn ndb_note_is_rumor(note: *mut ndb_note) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ndb_note_rumor_receiver_pubkey(note: *mut ndb_note) -> *mut ::std::os::raw::c_uchar;
+}
+extern "C" {
+    pub fn ndb_note_rumor_giftwrap_id(note: *mut ndb_note) -> *mut ::std::os::raw::c_uchar;
 }
 extern "C" {
     #[doc = " write the note as json to a buffer"]
@@ -6543,6 +6995,10 @@ fn bindgen_test_layout_ndb_note_meta() {
         )
     );
 }
+pub const ndb_note_meta_flags_NDB_NOTE_META_FLAG_DELETED: ndb_note_meta_flags = 0;
+pub const ndb_note_meta_flags_NDB_NOTE_META_FLAG_SEEN: ndb_note_meta_flags = 2;
+pub const ndb_note_meta_flags_NDB_NOTE_META_FLAG_ZAP_VERIFIED: ndb_note_meta_flags = 4;
+pub type ndb_note_meta_flags = ::std::os::raw::c_int;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct __crt_locale_data {
